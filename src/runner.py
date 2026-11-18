@@ -21,7 +21,7 @@ Command line (from the project root), useful for long GPU runs outside a noteboo
 
     python -m src.runner floors
     python -m src.runner tune
-    python -m src.runner url_vae
+    python -m src.runner url_vae                (seeds 0, 1 and 2)
     python -m src.runner url_supervised --epochs 6
 """
 from __future__ import annotations
@@ -42,7 +42,7 @@ from src.prepare_data import data_version, load_items
 from src.supervised import (SupervisedConfig, save_classifier, score_classifier, train_classifier)
 from src.url_vae import SCORE_NAMES, VAEConfig, save_vae, score_vae, train_vae
 
-DEFAULT_SEEDS = (0,)
+DEFAULT_SEEDS = (0, 1, 2)
 
 
 def _rows(items: pd.DataFrame, split: str, cls: str | None = None) -> np.ndarray:
@@ -156,19 +156,6 @@ def matching_reference_config(artifacts_dir: Path | str, vae_model: str = "url_v
     Falls back to the default VAE sizes if no VAE has been trained yet.
     """
     return SupervisedConfig.matching(_saved_config(artifacts_dir, vae_model, VAEConfig), **overrides)
-
-
-def final_configs(artifacts_dir: Path | str) -> tuple[VAEConfig, SupervisedConfig]:
-    """Settings for the final multi-seed runs (6_results.ipynb): those of the development runs, so tuning happens once.
-
-    The VAE settings come from the seed 0 model saved by 4_url_vae.ipynb. The reference takes its training settings from the
-    seed 0 model saved by 5_supervised_reference.ipynb and its encoder sizes from the VAE. A model that was not trained yet
-    gets the defaults.
-    """
-    vae = _saved_config(artifacts_dir, "url_vae", VAEConfig)
-    ref = _saved_config(artifacts_dir, "url_supervised", SupervisedConfig)
-    return vae, SupervisedConfig.matching(vae, epochs=ref.epochs, batch_size=ref.batch_size, lr=ref.lr,
-                                          grad_clip=ref.grad_clip, bucket_batches=ref.bucket_batches)
 
 
 # ----------------------------------------------------------------------------------------------------------------------

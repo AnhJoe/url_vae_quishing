@@ -292,17 +292,6 @@ def model_checks(items: pd.DataFrame, seed: int = 0) -> Checks:
           mean_longest(buck) < 0.6 * mean_longest(rand), f"{mean_longest(buck):.0f} against {mean_longest(rand):.0f} characters")
     c.add("the same seed gives the same batches", all(np.array_equal(x, y) for x, y in zip(buck, buck2)))
 
-    # final runs reuse the settings of the development run
-    from src.runner import final_configs
-    from src.url_vae import save_vae
-    with tempfile.TemporaryDirectory() as tmp:
-        d_vae, d_ref = final_configs(tmp)
-        c.add("with no saved run the final settings are the defaults", d_vae == VAEConfig() and d_ref == SupervisedConfig.matching(VAEConfig()))
-        save_vae(Path(tmp) / "url_vae" / "seed0", trained, hist, seed)
-        f_vae, f_ref = final_configs(tmp)
-        c.add("the final VAE settings are the ones saved with the development model", f_vae == fit)
-        c.add("the final reference takes its encoder sizes from the VAE", (f_ref.emb_dim, f_ref.hidden, f_ref.bidirectional) == (fit.emb_dim, fit.hidden, fit.bidirectional))
-
     # run records: a finished seed is skipped, and a changed setting, other data or a missing record trains it again
     from src.runner import RECORD_FILE, quick_subset, run_url_vae
     sub = quick_subset(items, per_group=30, seed=seed)

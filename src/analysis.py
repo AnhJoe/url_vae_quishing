@@ -372,7 +372,8 @@ class Analysis:
 
         Beats its floor            paired AUROC difference vs floor A, 95% interval above 0 (mean over seeds)
         Holds within strata        the same in a majority of the strata that have enough items
-        Seed robustness            the lowest seed still beats floor A (its own interval above 0)
+        Seed robustness            the lowest seed still beats floor A (its own interval above 0); only for a model with
+                                   more than one seed (with one seed the row is left out, because no spread can be measured)
         Floor B alongside          the same comparison with floor B (information only)
         Gap to the reference       share of the floor-to-reference AUROC gap the model closes (descriptive, no threshold)
         Not meeting a criterion is a finding, not a failure of the project.
@@ -393,11 +394,12 @@ class Analysis:
                      "detail": f"beats floor A in {wins} of {len(elig)} strata with at least {self.min_per_class} items and "
                                f"{self.min_domains} domains of each class ({len(st) - len(elig)} strata too small, listed in strata())"})
         per_seed = cmp_a.iloc[1:]
-        low = per_seed.loc[per_seed["ci_low"].idxmin()]
-        rows.append({"criterion": "Seed robustness", "result": "pass" if bool((per_seed["ci_low"] > 0).all()) else "FAIL",
-                     "value": float(per_seed["ci_low"].min()),
-                     "detail": f"{len(per_seed)} seeds; the weakest ({low['run']}) has difference {low['difference']:+.3f}, "
-                               f"95% CI low {low['ci_low']:+.3f}"})
+        if len(per_seed) > 1:
+            low = per_seed.loc[per_seed["ci_low"].idxmin()]
+            rows.append({"criterion": "Seed robustness", "result": "pass" if bool((per_seed["ci_low"] > 0).all()) else "FAIL",
+                         "value": float(per_seed["ci_low"].min()),
+                         "detail": f"{len(per_seed)} seeds; the weakest ({low['run']}) has difference {low['difference']:+.3f}, "
+                                   f"95% CI low {low['ci_low']:+.3f}"})
         head_b = self.compare(model, score, *floor_b).iloc[0]
         rows.append({"criterion": "Floor B alongside (information)", "result": "info", "value": head_b["difference"],
                      "detail": f"AUROC {head_b['model_auroc']:.3f} vs {head_b['reference_auroc']:.3f}, difference "
