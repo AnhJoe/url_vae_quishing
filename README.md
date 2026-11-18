@@ -1,36 +1,16 @@
 # convolutional_vae_quishing
 ## Introduction
-This project trains a Convolutional Variational Autoencoder (VAE) on benign QR code images only, then detects malicious codes as points the model reconstructs poorly, without ever training on a malicious/benign label.
+This project trains a character-level Variational Autoencoder (VAE) on the URLs of benign QR codes only, then detects malicious URLs as strings the model explains poorly, without ever training on a malicious/benign label.
 
 ## Executive Summary
 
-## Project Motivation
+### Project Motivation
 
-## Key Contributions
-
-## Literature Review & Related Work
+### Key Contributions
 
 ## Data Summary
 
 Data: https://drive.google.com/drive/folders/1i5dQyllOAbZAM4XvXrJ0d1MuUuJMGVeb?usp=sharing
-
-## Metholodogy
-
-### Model Framework
-
-### Model Implementation
-
-## Experimental Results
-
-### Evaluation & Analysis
-
-## Conclusion
-
-### Comparison to Existing Literature
-
-### Limitations & Challenges
-
-### Future Work
 
 ## References
 Canadian Institute for Cybersecurity. (2025). CIC-Trap4Phish 2025 [Data set]. University of New Brunswick. https://www.unb.ca/cic/datasets/trap4phish2025.html

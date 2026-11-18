@@ -11,11 +11,7 @@ One file holds the scores of one score type, one seed and one split. It is a gzi
     item_id   int     the `item_id` of the items table (data/processed/items.csv.gz). Each id appears once.
     score     float   anomaly score. HIGHER MEANS MORE LIKELY MALICIOUS. No NaN or infinite values.
 
-The rows must be exactly the items the model is scored on, no more and no fewer:
-
-    scope "all"     every item of the split. Use for URL models, URL floors and URL supervised references.
-    scope "canvas"  every item of the split with fits_canvas true. Use for image models, image floors and image
-                    supervised references (codes larger than the 65 x 65 canvas are excluded, not cropped).
+The rows must be exactly the items of the split the file is for (every item of that split), no more and no fewer.
 
 A score whose natural direction is the other way (for example the probability of benign) must be negated before saving.
 Scores from a supervised reference are saved the same way (for example the predicted probability of malicious).
@@ -25,12 +21,11 @@ Results layout
     results/<model>/<score>/seed<k>/validation.csv.gz
     results/<model>/<score>/seed<k>/test.csv.gz
 
-    <model>   what produced the score, for example floorA_image, floorB_url, image_vae, url_vae,
-              image_supervised, url_supervised. Lower case letters, digits and underscores.
-    <score>   which score of that model, for example recon_error, neg_elbo, kl, mahalanobis (image VAE),
-              nll_per_char, neg_elbo_per_char (URL VAE), prob_malicious (supervised). A floor has one score, called
-              mahalanobis (a floor with several features). The URL floor A has the single feature url_len and is
-              scored as an absolute z-score, so its score name is abs_z.
+    <model>   what produced the score, for example floorA_url, floorB_url, url_vae, url_supervised. Lower case
+              letters, digits and underscores.
+    <score>   which score of that model, for example nll_per_char, neg_elbo_per_char (URL VAE), prob_malicious
+              (supervised). Floor B has one score, called mahalanobis (a floor with several features). Floor A has the
+              single feature url_len and is scored as an absolute z-score, so its score name is abs_z.
     seed      integer. Models with no randomness (the floors) use seed0.
 
 The validation file is always needed, because the alarm threshold is set on its benign rows. The test file is read only
@@ -49,17 +44,17 @@ Metrics (all on one seed and one split, malicious is the positive class)
 Threshold rule: flag an item if its score is above the (1 - FPR) quantile of the validation benign scores, so the
 threshold never uses test data or malicious items.
 
-Typical use in a model notebook (3_image_vae.ipynb or 4_url_vae.ipynb):
+Typical use (src/runner.py does this for every model; see the model notebooks):
 
-    metrics = save_and_evaluate(RESULTS_DIR, items, SCOPE, "image_vae", "neg_elbo", seed=0,
+    metrics = save_and_evaluate(RESULTS_DIR, items, "url_vae", "nll_per_char", seed=0,
                                 validation=(val_ids, val_scores), test=(test_ids, test_scores))
 
 Command line (from the project root):
 
-    python -m src.evaluate results/image_vae/neg_elbo/seed0 --scope canvas
-    python -m src.evaluate results/url_vae/nll_per_char/seed0 --scope all
+    python -m src.evaluate results/url_vae/nll_per_char/seed0
 
-Not built yet: bootstrap confidence intervals, strata tables, paired comparison with a floor, seed aggregation.
+Confidence intervals, strata tables, paired comparison with a floor, seed aggregation and the success criteria are in
+src/analysis.py, which reads the same score files.
 """
 from __future__ import annotations
 
@@ -72,7 +67,6 @@ import pandas as pd
 from src.prepare_data import load_items
 
 SCORED_SPLITS = ["validation", "test"]
-SCOPES = ["all", "canvas"]
 FPR_LEVELS = (0.01, 0.05)
 
 
@@ -102,14 +96,12 @@ def save_scores(results_dir: Path | str, model: str, score: str, seed: int, spli
     return path
 
 
-def load_scores(path: Path | str, items: pd.DataFrame, split: str, scope: str) -> pd.DataFrame:
+def load_scores(path: Path | str, items: pd.DataFrame, split: str) -> pd.DataFrame:
     """Read one score file, check it against the items table, and return the items of that split with their score.
 
     The result has the items table columns plus `score`, so strata and domains are available to later steps.
     Raises ValueError with the reason if the file does not follow the schema.
     """
-    if scope not in SCOPES:
-        raise ValueError(f"scope must be one of {SCOPES}, got {scope!r}")
     t = pd.read_csv(path)
     if list(t.columns) != ["item_id", "score"]:
         raise ValueError(f"{path}: columns must be exactly item_id, score. Found {list(t.columns)}")
@@ -119,12 +111,10 @@ def load_scores(path: Path | str, items: pd.DataFrame, split: str, scope: str) -
         raise ValueError(f"{path}: scores contain NaN or infinite values")
 
     expected = items[items["split"] == split]
-    if scope == "canvas":
-        expected = expected[expected["fits_canvas"]]
     missing = np.setdiff1d(expected["item_id"].to_numpy(), t["item_id"].to_numpy())
     extra = np.setdiff1d(t["item_id"].to_numpy(), expected["item_id"].to_numpy())
     if len(missing) or len(extra):
-        raise ValueError(f"{path}: does not match the {split} items for scope {scope!r} "
+        raise ValueError(f"{path}: does not match the {split} items "
                          f"({len(missing):,} missing, {len(extra):,} not expected)")
     return expected.merge(t, on="item_id", how="left", validate="one_to_one").reset_index(drop=True)
 
@@ -176,13 +166,13 @@ def flagged_share(scores, threshold: float) -> float:
 # ----------------------------------------------------------------------------------------------------------------------
 # One run (one model, score type and seed)
 # ----------------------------------------------------------------------------------------------------------------------
-def evaluate_run(folder: Path | str, items: pd.DataFrame, scope: str) -> pd.DataFrame:
+def evaluate_run(folder: Path | str, items: pd.DataFrame) -> pd.DataFrame:
     """Metrics on the test split for one run folder, with thresholds from the validation split. One row."""
     folder = Path(folder)
-    val = load_scores(folder / "validation.csv.gz", items, "validation", scope)
-    test = load_scores(folder / "test.csv.gz", items, "test", scope)
+    val = load_scores(folder / "validation.csv.gz", items, "validation")
+    test = load_scores(folder / "test.csv.gz", items, "test")
 
-    row = {"model": folder.parts[-3], "score": folder.parts[-2], "seed": int(folder.name.removeprefix("seed")), "scope": scope,
+    row = {"model": folder.parts[-3], "score": folder.parts[-2], "seed": int(folder.name.removeprefix("seed")),
            "n_benign": int((test["label"] == 0).sum()), "n_malicious": int((test["label"] == 1).sum())}
     row["prevalence"] = row["n_malicious"] / len(test)
     row["auroc"] = auroc(test["label"], test["score"])
@@ -197,26 +187,24 @@ def evaluate_run(folder: Path | str, items: pd.DataFrame, scope: str) -> pd.Data
     return pd.DataFrame([row])
 
 
-def save_and_evaluate(results_dir: Path | str, items: pd.DataFrame, scope: str, model: str, score: str, seed: int,
+def save_and_evaluate(results_dir: Path | str, items: pd.DataFrame, model: str, score: str, seed: int,
                       validation, test) -> pd.DataFrame:
     """Save the validation and test scores of one run, then return its metrics (one row, see evaluate_run).
 
-    `validation` and `test` are (item_id, scores) pairs, one score per item the model is scored on (see the scope rules
-    at the top of this file). The same call works for every model, floor and supervised reference.
+    `validation` and `test` are (item_id, scores) pairs, one score per item of the split (see the top of this file). The same call works for every model, floor and supervised reference.
     """
     for split, (ids, values) in zip(SCORED_SPLITS, (validation, test)):
         save_scores(results_dir, model, score, seed, split, ids, values)
-    return evaluate_run(run_dir(results_dir, model, score, seed), items, scope)
+    return evaluate_run(run_dir(results_dir, model, score, seed), items)
 
 
 def main() -> None:
     p = argparse.ArgumentParser(description="Metrics for one run folder (see the top of this file for the schema).")
     p.add_argument("run_dir", type=Path, help="results/<model>/<score>/seed<k>")
-    p.add_argument("--scope", choices=SCOPES, required=True, help="all: URL models. canvas: image models")
     p.add_argument("--root", type=Path, default=Path.cwd(), help="project root (the folder that contains src and data)")
     a = p.parse_args()
     items = load_items(a.root / "data" / "processed")
-    out = evaluate_run(a.run_dir, items, a.scope)
+    out = evaluate_run(a.run_dir, items)
     print(out.T.to_string(header=False))
 
 

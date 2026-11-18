@@ -5,15 +5,16 @@ gdown>=5.2
 numpy>=1.26
 pandas>=2.2
 
-# Images (reading the QR PNG files)
-Pillow>=10.0
-
 # Visualization
 matplotlib>=3.8
 seaborn>=0.13
 
 # Styled, titled tables in the notebooks (pandas needs a recent jinja2)
 jinja2>=3.1.2
+
+# Deep learning for the URL VAE (PyTorch). On Windows, pip installs the CPU build by default. For an NVIDIA GPU install the
+# CUDA build first from https://pytorch.org/get-started/locally/ (the pip command there sets the right index URL).
+torch>=2.2
 
 # Notebooks
 ipykernel>=6.29

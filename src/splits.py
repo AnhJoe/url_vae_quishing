@@ -1,6 +1,6 @@
 """Train, validation and test splits grouped by domain.
 
-The rule is decided in notebooks/1_eda.ipynb section 6 and applied in notebooks/2_data_processing.ipynb (through
+The rule is decided in notebooks/1_eda.ipynb section 5 and applied in notebooks/2_data_processing.ipynb (through
 src/prepare_data.py): whole domains go to one split, the largest domains fill train first, and the remaining domains are
 shuffled and dealt to validation and test in the ratio of their fractions. Benign and malicious rows are split separately
 with the same fractions, so every split has about the same share of malicious rows.
