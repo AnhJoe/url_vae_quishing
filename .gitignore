@@ -45,6 +45,9 @@ data/artifacts/
 *.joblib
 *.onnx
 
+# Model results and scores (share score files directly)
+results/
+
 # =========================
 # Quarto / Render Outputs
 # =========================
@@ -104,6 +107,3 @@ envs/
 *.conda
 *.conda-lock
 /.quarto/
-
-# Model results and scores
-results/
