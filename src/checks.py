@@ -469,6 +469,15 @@ def analysis_checks(items: pd.DataFrame, seed: int = 0) -> Checks:
         c.add("a stratum with 150 rows per class from one domain is not eligible",
               int(counts.loc["check_few_domains", "n_benign"]) >= 150 and not bool(counts.loc["check_few_domains", "eligible"]),
               f"{int(counts.loc['check_few_domains', 'domains_benign'])} domain per class")
+        mt = an.metrics_table([("check_good", "made_up")])
+        row = mt.iloc[0]
+        c.add("the compact metrics table writes every metric as value [low, high] and agrees with metrics_ci",
+              list(mt.columns) == ["model", "score", "n_seeds", "AUROC", "AUPRC", "recall at 1% FPR", "recall at 5% FPR"]
+              and row["AUROC"].startswith(f"{an.metrics_ci([('check_good', 'made_up')]).iloc[0]['auroc']:.3f} [") and row["AUROC"].endswith("]"))
+        fc = an.floor_comparison("check_good", "made_up", floors=(("floor A", ("check_random", "made_up")), ("floor B", ("check_good", "made_up"))))
+        c.add("the floor comparison has one overall row per floor, matching compare()",
+              list(fc["floor"]) == ["floor A", "floor B"] and abs(fc["difference"].iloc[0] - an.compare("check_good", "made_up", "check_random", "made_up")["difference"].iloc[0]) < 1e-12
+              and bool(fc["beats_floor"].iloc[0]) and not bool(fc["beats_floor"].iloc[1]))
         crit = an.criteria("check_good", "made_up", floor=("check_random", "made_up"), floor_b=("check_random", "made_up"), reference=("check_missing", "x"))
         c.add("the success criteria table has its five rows and a pass for an informative score", len(crit) == 5 and crit["result"].iloc[:3].eq("pass").all(), ", ".join(crit["result"]))
         single = an.criteria("check_single", "made_up", floor=("check_random", "made_up"), floor_b=("check_random", "made_up"), reference=("check_missing", "x"))

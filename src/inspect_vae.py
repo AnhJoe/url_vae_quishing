@@ -45,16 +45,17 @@ def char_nll(model: URLVAE, data: Tensors, device: torch.device, batch_size: int
     return out
 
 
-def surprise_examples(test: pd.DataFrame, score: np.ndarray, per_group: int = 2, max_len: int = 70) -> pd.DataFrame:
+def surprise_examples(test: pd.DataFrame, score: np.ndarray, per_group: int = 2, max_len: int = 70, min_len: int = 12) -> pd.DataFrame:
     """Example test URLs for the surprise figure, chosen by their score and never by looking at the characters.
 
-    Four groups, among URLs of at most `max_len` characters (so a row fits on a page): the benign URLs with the highest
+    Four groups, among URLs of `min_len` to `max_len` characters (the longest so a row fits on a page, the shortest so an example
+    is a URL and not a few characters): the benign URLs with the highest
     score (false alarms), the benign URLs nearest the benign median (typical), the malicious URLs with the highest score
     (caught) and the malicious URLs with the lowest score (missed). Returns the chosen rows of `test` with `group` and
     `score` columns and `position` (the row number in `test`).
     """
     t = test.reset_index(drop=True).assign(score=np.asarray(score, dtype=float), position=np.arange(len(test)))
-    t = t[t["url_len"] <= max_len]
+    t = t[t["url_len"].between(min_len, max_len)]
     benign, malicious = t[t["label"] == 0], t[t["label"] == 1]
     typical = (benign["score"] - benign["score"].median()).abs().nsmallest(per_group).index
     picks = [("benign, highest score (false alarms)", benign.nlargest(per_group, "score")),

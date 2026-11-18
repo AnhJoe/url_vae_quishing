@@ -4,8 +4,10 @@ src/evaluate.py turns one score file into point metrics. This module answers the
 score files (results/<model>/<score>/seed<k>/), and never recomputes a model:
 
     seed_table()           one row of metrics per run, and `seed_summary()` the mean, spread and range over seeds
-    metrics_ci()           AUROC, AUPRC and recall at 1% / 5% FPR with 95% confidence intervals
-    compare()              paired AUROC difference between a model and a reference (a floor), overall and per seed
+    metrics_ci()           AUROC, AUPRC and recall at 1% / 5% FPR with 95% confidence intervals, and `metrics_table()` the same
+                           as a compact table of "value [low, high]" strings for reading
+    compare()              paired AUROC difference between a model and a reference (a floor), overall and per seed, and
+                           `floor_comparison()` the overall difference against floor A and floor B in one table
     strata()               AUROC inside each stratum (URL-length bin, scheme) and the paired difference there
     criteria()             the agreed success criteria, fixed on validation before the test set is touched
     choose_score()         which of a model's scores is the headline one, chosen on validation AUROC
@@ -269,6 +271,14 @@ class Analysis:
             rows.append(row)
         return pd.DataFrame(rows)
 
+    def metrics_table(self, runs=None) -> pd.DataFrame:
+        """`metrics_ci()` for reading: one row per model and score, every metric as "value [low, high]" (3 decimals)."""
+        ci = self.metrics_ci(runs)
+        out = ci[["model", "score", "n_seeds"]].copy()
+        for name, label in (("auroc", "AUROC"), ("auprc", "AUPRC"), ("recall_at_1pct_fpr", "recall at 1% FPR"), ("recall_at_5pct_fpr", "recall at 5% FPR")):
+            out[label] = [f"{v:.3f} [{lo:.3f}, {hi:.3f}]" for v, lo, hi in zip(ci[name], ci[f"{name}_lo"], ci[f"{name}_hi"])]
+        return out
+
     # paired comparison
     def compare(self, model: str, score: str, ref_model: str = FLOOR_A[0], ref_score: str = FLOOR_A[1],
                 ref_seed: int = 0) -> pd.DataFrame:
@@ -305,6 +315,15 @@ class Analysis:
         return self._cache[key].copy()
 
     # strata
+    def floor_comparison(self, model: str, score: str, floors=(("floor A", FLOOR_A), ("floor B", FLOOR_B))) -> pd.DataFrame:
+        """Paired AUROC difference (mean over seeds) between a model and each floor, with the 95% interval, one row per floor."""
+        rows = []
+        for name, (ref_model, ref_score) in floors:
+            r = self.compare(model, score, ref_model, ref_score).iloc[0]
+            rows.append({"floor": name, "model_auroc": r["model_auroc"], "floor_auroc": r["reference_auroc"], "difference": r["difference"],
+                         "ci_low": r["ci_low"], "ci_high": r["ci_high"], "beats_floor": bool(r["beats_reference"])})
+        return pd.DataFrame(rows)
+
     def strata_counts(self, columns=STRATA_COLUMNS) -> pd.DataFrame:
         """Test items and domains per stratum and class, and whether the stratum has enough of both for an AUROC."""
         rows = []

@@ -1,15 +1,16 @@
 """Small plotting helpers for the model notebooks, so the notebook cells stay one line each.
 
-    plot_vae_history(histories)       training curves of the URL VAE: the KL term per epoch (a collapse check) and the
-                                      validation negative ELBO per character, one line per seed
+    plot_vae_history(histories)       training curves of the URL VAE: the validation KL term per epoch (a collapse check) and
+                                      the validation negative ELBO per character, one line per seed
     plot_classifier_history(histories)  training and validation cross-entropy of the supervised reference
-    plot_strata(table)                AUROC of the model and of its reference inside each stratum (from Analysis.strata)
+    plot_strata(table)                AUROC of the model and of its reference inside each stratum, with the paired difference
+                                      and its interval (from Analysis.strata)
 
 Figures of the final results (6_results.ipynb section 9), built on src/analysis.py and src/inspect_vae.py:
     plot_detection(an, entries)       ROC curves and the AUROC with its 95% interval (beats the floor, gap to the reference)
     plot_score_distributions(an, ..)  the headline score of benign and malicious test URLs, overall and by URL scheme
     plot_surprise(examples, nll)      example URLs with every character coloured by how surprising the decoder found it
-    plot_latent(coords, ...)          the latent space of the test URLs (first two principal components)
+    plot_latent(coords, ...)          the latent space of the test URLs (first two principal components), coloured by class
 """
 from __future__ import annotations
 
@@ -22,15 +23,13 @@ BENIGN_COLOR, MALICIOUS_COLOR = "#2a7ab9", "#d1495b"
 
 
 def plot_vae_history(histories: dict[int, pd.DataFrame]):
-    """KL per URL and validation negative ELBO per character against the epoch, for every seed."""
-    fig, ax = plt.subplots(1, 3, figsize=(13, 3.4))
+    """KL per URL and negative ELBO per character on the benign validation URLs against the epoch, for every seed."""
+    fig, ax = plt.subplots(1, 2, figsize=(9.5, 3.4))
     for seed, h in histories.items():
-        ax[0].plot(h["epoch"], h["train_kl"], label=f"seed {seed}")
-        ax[1].plot(h["epoch"], h["val_kl"], label=f"seed {seed}")
-        ax[2].plot(h["epoch"], h["val_neg_elbo_per_char"], label=f"seed {seed}")
-    ax[0].set(title="KL term, training (nats per URL)", xlabel="epoch")
-    ax[1].set(title="KL term, benign validation", xlabel="epoch")
-    ax[2].set(title="Negative ELBO per character, benign validation", xlabel="epoch")
+        ax[0].plot(h["epoch"], h["val_kl"], label=f"seed {seed}")
+        ax[1].plot(h["epoch"], h["val_neg_elbo_per_char"], label=f"seed {seed}")
+    ax[0].set(title="KL term, benign validation (nats per URL)", xlabel="epoch")
+    ax[1].set(title="Negative ELBO per character, benign validation", xlabel="epoch")
     ax[0].legend(frameon=False, fontsize=8)
     fig.tight_layout()
     return fig
@@ -49,19 +48,31 @@ def plot_classifier_history(histories: dict[int, pd.DataFrame]):
 
 
 def plot_strata(table: pd.DataFrame, model_label: str = "URL VAE", ref_label: str = "floor A"):
-    """AUROC inside each stratum for the model and its reference. Strata with too few items are left out."""
-    t = table[table["eligible"].astype(bool)].reset_index(drop=True)
-    fig, ax = plt.subplots(figsize=(7.5, 3.6))
+    """AUROC inside each stratum for the model and its reference, with the paired difference and its 95% interval.
+
+    The label of a stratum carries its number of benign and malicious test URLs. Strata with too few URLs or domains have no
+    AUROC and are named under the figure.
+    """
+    ok = table["eligible"].astype(bool)
+    t = table[ok].reset_index(drop=True)
+    fig, ax = plt.subplots(figsize=(9.2, 0.62 * len(t) + 1.5))
     y = np.arange(len(t))
     ax.barh(y - 0.2, t["model_auroc"], height=0.38, color=MODEL_COLOR, label=model_label)
     ax.barh(y + 0.2, t["reference_auroc"], height=0.38, color=REF_COLOR, label=ref_label)
     ax.axvline(0.5, color="black", linewidth=0.8, linestyle=":")
     ax.set_yticks(y)
-    ax.set_yticklabels([f"{c}: {s}" for c, s in zip(t["stratum_column"], t["stratum"])])
+    ax.set_yticklabels([f"{c}: {s}\n{nb:,} benign, {nm:,} malicious" for c, s, nb, nm in
+                        zip(t["stratum_column"], t["stratum"], t["n_benign"], t["n_malicious"])], fontsize=8)
+    for yi, d, lo, hi in zip(y, t["difference"], t["ci_low"], t["ci_high"]):
+        ax.text(1.02, yi, f"{d:+.3f}  [{lo:+.3f}, {hi:+.3f}]", transform=ax.get_yaxis_transform(), va="center", fontsize=8)
+    ax.text(1.02, -0.9, "paired difference, 95% interval", transform=ax.get_yaxis_transform(), fontsize=8, color="#555555")
     ax.invert_yaxis()
     ax.set(xlabel="test AUROC", xlim=(0.3, 1.0), title="AUROC within strata")
-    ax.legend(frameon=False, loc="lower right")
-    fig.tight_layout()
+    ax.legend(frameon=False, loc="upper center", bbox_to_anchor=(0.5, -0.16), ncol=2)
+    if (~ok).any():
+        left_out = ", ".join(f"{c}: {s}" for c, s in zip(table.loc[~ok, "stratum_column"], table.loc[~ok, "stratum"]))
+        fig.text(0.01, 0.01, f"Not shown (too few URLs or domains for an AUROC): {left_out}", fontsize=7.5, color="#555555")
+    fig.tight_layout(rect=(0, 0.04, 1, 1))
     return fig
 
 
@@ -179,21 +190,17 @@ def plot_surprise(examples: pd.DataFrame, nll: list, vmax: float = 6.0, max_char
     return fig
 
 
-def plot_latent(coords: np.ndarray, labels: np.ndarray, score: np.ndarray, explained, n_active: int, latent: int, seed: int = 0):
-    """The test URLs in the first two principal components of the posterior mean. Left: coloured by class. Right: by score."""
+def plot_latent(coords: np.ndarray, labels: np.ndarray, explained, n_active: int, latent: int, seed: int = 0):
+    """The test URLs in the first two principal components of the posterior mean, coloured by class."""
     order = np.random.default_rng(seed).permutation(len(coords))                 # so neither class is drawn on top of the other
-    c, y, s = coords[order], np.asarray(labels)[order], np.asarray(score)[order]
-    fig, ax = plt.subplots(1, 2, figsize=(10.5, 4.2))
-    ax[0].scatter(c[:, 0], c[:, 1], s=3, alpha=0.5, c=np.where(y == 1, MALICIOUS_COLOR, BENIGN_COLOR), linewidths=0)
-    ax[0].scatter([], [], s=20, c=BENIGN_COLOR, label="benign")
-    ax[0].scatter([], [], s=20, c=MALICIOUS_COLOR, label="malicious")
-    ax[0].legend(frameon=False, fontsize=8)
-    ax[0].set(title="coloured by class")
-    sc = ax[1].scatter(c[:, 0], c[:, 1], s=3, alpha=0.6, c=s, cmap="viridis", vmin=np.quantile(s, 0.01), vmax=np.quantile(s, 0.99), linewidths=0)
-    fig.colorbar(sc, ax=ax[1], label="anomaly score")
-    ax[1].set(title="coloured by score")
-    for a in ax:
-        a.set(xlabel=f"component 1 ({explained[0]:.0%} of variance)", ylabel=f"component 2 ({explained[1]:.0%})")
-    fig.suptitle(f"Latent space of {len(coords):,} test URLs: {n_active} of {latent} dimensions active", fontsize=10)
+    c, y = coords[order], np.asarray(labels)[order]
+    fig, ax = plt.subplots(figsize=(6.2, 4.4))
+    ax.scatter(c[:, 0], c[:, 1], s=3, alpha=0.5, c=np.where(y == 1, MALICIOUS_COLOR, BENIGN_COLOR), linewidths=0)
+    ax.scatter([], [], s=20, c=BENIGN_COLOR, label="benign")
+    ax.scatter([], [], s=20, c=MALICIOUS_COLOR, label="malicious")
+    ax.legend(frameon=False, fontsize=8)
+    ax.set(xlabel=f"component 1 ({explained[0]:.0%} of variance)", ylabel=f"component 2 ({explained[1]:.0%})",
+           title=f"Latent space of {len(coords):,} test URLs: {n_active} of {latent} dimensions active")
+    ax.title.set_fontsize(10)
     fig.tight_layout()
     return fig
