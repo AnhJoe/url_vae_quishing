@@ -1,7 +1,7 @@
 """Small plotting helpers for the model notebooks, so the notebook cells stay one line each.
 
-    plot_vae_history(histories)       training curves of the URL VAE: the validation KL term per epoch (a collapse check) and
-                                      the validation negative ELBO per character, one line per seed
+    plot_vae_history(histories)       training curves of the URL VAE: reconstruction per character (train and validation), the
+                                      validation KL term (a collapse check), and the validation negative ELBO per character
     plot_classifier_history(histories)  training and validation cross-entropy of the supervised reference
     plot_strata(table)                AUROC of the model and of its reference inside each stratum, with the paired difference
                                       and its interval (from Analysis.strata)
@@ -23,14 +23,25 @@ BENIGN_COLOR, MALICIOUS_COLOR = "#2a7ab9", "#d1495b"
 
 
 def plot_vae_history(histories: dict[int, pd.DataFrame]):
-    """KL per URL and negative ELBO per character on the benign validation URLs against the epoch, for every seed."""
-    fig, ax = plt.subplots(1, 2, figsize=(9.5, 3.4))
+    """Training curves of the URL VAE against the epoch, one color per seed.
+
+    Left: reconstruction negative log-likelihood per character, training (dashed) and benign validation (solid). The
+    learning objective is almost all reconstruction, and a validation line that stays near the training line means the
+    model is not overfitting. The training value is a running average over the epoch and the validation value is measured
+    at the end of it. Middle: KL term on the benign validation URLs (a line near 0 means posterior collapse). Right:
+    negative ELBO per character on the benign validation URLs, the criterion that picks the epoch kept.
+    """
+    fig, ax = plt.subplots(1, 3, figsize=(13, 3.4))
     for seed, h in histories.items():
-        ax[0].plot(h["epoch"], h["val_kl"], label=f"seed {seed}")
-        ax[1].plot(h["epoch"], h["val_neg_elbo_per_char"], label=f"seed {seed}")
-    ax[0].set(title="KL term, benign validation (nats per URL)", xlabel="epoch")
-    ax[1].set(title="Negative ELBO per character, benign validation", xlabel="epoch")
-    ax[0].legend(frameon=False, fontsize=8)
+        line, = ax[0].plot(h["epoch"], h["train_rec_per_char"], linestyle="--", alpha=0.7)
+        ax[0].plot(h["epoch"], h["val_nll_per_char"], color=line.get_color(), label=f"seed {seed}")
+        ax[1].plot(h["epoch"], h["val_kl"], color=line.get_color(), label=f"seed {seed}")
+        ax[2].plot(h["epoch"], h["val_neg_elbo_per_char"], color=line.get_color(), label=f"seed {seed}")
+    ax[0].set(title="Reconstruction NLL per character (dashed: train, solid: validation)", xlabel="epoch")
+    ax[1].set(title="KL term, benign validation (nats per URL)", xlabel="epoch")
+    ax[2].set(title="Negative ELBO per character, benign validation", xlabel="epoch")
+    ax[0].title.set_fontsize(9)
+    ax[1].legend(frameon=False, fontsize=8)
     fig.tight_layout()
     return fig
 
