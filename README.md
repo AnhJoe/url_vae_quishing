@@ -16,6 +16,8 @@ A character-level VAE trained only on benign QR code URLs separates malicious fr
 
 The VAE beats floor A by 0.231 AUROC and floor B by 0.053, in every stratum we could test, and the weakest of its 3 seeds still beats floor A. It closes about 59% of the gap between floor A and the supervised reference.
 
+Final Report: https://github.com/AnhJoe/url_vae_quishing/releases/tag/docs 
+
 ## Project Motivation
 
 A QR code hides its destination, so a person cannot judge the link before scanning it, and attackers use that for phishing (quishing; see the FTC and Unit 42 references). Labeled attack data goes stale as attackers change tactics. A detector that learns only what benign URLs look like needs no labeled attacks, and flags a URL when the model finds it unlikely. Whether this works is an open question, autoencoders' reliability for anomaly detection is often challenged (Bouman & Heskes, 2025).
