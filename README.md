@@ -16,7 +16,8 @@ A character-level VAE trained only on benign QR code URLs separates malicious fr
 
 The VAE beats floor A by 0.231 AUROC and floor B by 0.053, in every stratum we could test, and the weakest of its 3 seeds still beats floor A. It closes about 59% of the gap between floor A and the supervised reference.
 
-Final Report: https://github.com/AnhJoe/url_vae_quishing/releases/tag/docs 
+Final Report: https://github.com/AnhJoe/url_vae_quishing/releases/tag/docs
+Presentation: https://github.com/AnhJoe/url_vae_quishing/releases/tag/presentation
 
 ## Project Motivation
 
