@@ -130,9 +130,13 @@ Trad, F., & Chehab, A. (2025). Detecting quishing attacks with machine learning 
 
 ## Team Information:
 Joe Nguyen
+
 Adithya Rajendra
+
 Anishwar Chakraborty
+
 Atharva Deshpande
+
 Swaroop Veerla
 
 
